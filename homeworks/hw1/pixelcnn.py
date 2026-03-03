@@ -32,7 +32,7 @@ class MaskedConv2d(nn.Conv2d):
         return F.conv2d(x, masked_weight, bias=self.bias, stride=self.stride, padding=self.padding, dilation=self.dilation, groups=self.groups)
 
 class PixelCNN(nn.Module):
-    def __init__(self, in_channels=1, hidden_channels=64, kernel_size=7, num_layers=6):
+    def __init__(self, in_channels=1, hidden_channels=64, output_channels=1, kernel_size=7, num_layers=6):
         super().__init__()
         layers = nn.Sequential()
         for i in range(num_layers):
@@ -42,7 +42,7 @@ class PixelCNN(nn.Module):
             layers.append(nn.ReLU(inplace=True))
         layers.append(MaskedConv2d(hidden_channels, hidden_channels, 1, mask_type='B'))
         layers.append(nn.ReLU(inplace=True))
-        layers.append(MaskedConv2d(hidden_channels, 1, 1, mask_type='B'))  # output logits for each pixel value
+        layers.append(MaskedConv2d(hidden_channels, output_channels, 1, mask_type='B'))  # output logits for each pixel value
         layers.append(nn.Sigmoid())  # scale to [0, 1]
         self.net = nn.Sequential(*layers)
 

@@ -7,10 +7,11 @@ import torch.nn.functional as F
 import tqdm
 from matplotlib import pyplot as plt
 import numpy as np
+import os
 
 
 def load_data():
-    shape_data = np.load('/workspace/deepul/homeworks/hw1/data/shapes.pkl', allow_pickle=True)
+    shape_data = np.load('/workspace/deepul/homeworks/hw1/data/mnist.pkl', allow_pickle=True)
     train_data, test_data, train_labels, test_labels = shape_data['train'], shape_data['test'], shape_data['train_labels'], shape_data['test_labels']
     return train_data, test_data
 
@@ -59,7 +60,7 @@ class BinaryDataset(torch.utils.data.Dataset):
 
 
 def main():
-    output_folder = 'q2a_results'
+    output_folder = 'q2b_results'
     os.makedirs(output_folder, exist_ok=True)
 
     train_data, test_data = load_data()
@@ -94,7 +95,7 @@ def main():
     test_dataset = BinaryDataset(test_data)
     test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=N_batch_size, shuffle=False)
 
-    model = PixelCNN()
+    model = PixelCNN(num_layers=10)
     model.train().cuda()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
