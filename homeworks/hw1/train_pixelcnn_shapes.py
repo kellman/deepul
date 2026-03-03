@@ -14,7 +14,7 @@ def load_data():
     train_data, test_data, train_labels, test_labels = shape_data['train'], shape_data['test'], shape_data['train_labels'], shape_data['test_labels']
     return train_data, test_data
 
-def visualize_data(data):
+def visualize_data(data, output_name='shapes_visualization.png'):
     """data: (B, 1, H, W) numpy array of pixel values in [0, 1]
     """
     # visualize first 25 images from train_data (shape: B,1,H,W)
@@ -27,7 +27,7 @@ def visualize_data(data):
             ax.imshow(imgs[i], cmap='gray', vmin=0, vmax=np.max(data))
         ax.axis('off')
     plt.tight_layout()
-    plt.savefig('shapes_visualization.png')
+    plt.savefig(output_name)
 
 def visualize_loss(train_losses, val_losses, test_losses):
     plt.figure(figsize=(10, 5))
@@ -42,6 +42,7 @@ def visualize_loss(train_losses, val_losses, test_losses):
     plt.legend()
     plt.grid()
     plt.savefig('loss_curves.png')
+    plt.close()
 
 class BinaryDataset(torch.utils.data.Dataset):
     def __init__(self, data:torch.Tensor):
@@ -96,6 +97,7 @@ def main():
     train_losses, val_losses, test_losses = [], [], []
 
     for epoch in range(N_epochs):
+        model.train()
         for idx, batch in tqdm.tqdm(enumerate(train_dataloader)):
             batch = batch.cuda()
             predictions = model(batch)
@@ -105,6 +107,13 @@ def main():
             optimizer.step()
 
             train_losses.append(loss.detach().cpu().numpy())
+
+        model.eval()
+        with torch.no_grad():
+            # generate samples and save them
+            N_samples = 25
+            samples = model.sample(N_samples, train_data.shape[2], train_data.shape[3]).cpu().numpy() # (25, 1, H, W)
+            visualize_data(samples, output_name=f'samples_epoch_{epoch}.png')
         
         with torch.no_grad():
             val_loss = 0

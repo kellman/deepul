@@ -48,6 +48,35 @@ class PixelCNN(nn.Module):
 
     def forward(self, x):
         return self.net(2.0 * x - 1.0)
+    
+    def sample(self, num_samples, img_height, img_width, device='cuda'):
+        """
+        Generate samples from a trained PixelCNN model.
+        
+        Args:
+            model: Trained PixelCNN model
+            num_samples: Number of images to generate
+            img_height, img_width: Image dimensions
+            device: Device to generate on
+        
+        Returns:
+            samples: (num_samples, 1, img_height, img_width) tensor with values in [0, 1]
+        """
+        samples = torch.zeros(num_samples, 1, img_height, img_width, device=device)
+        
+        with torch.no_grad():
+            # Iterate through each pixel position (row-major order)
+            for i in range(img_height):
+                for j in range(img_width):
+                    # Get model predictions for current partial image
+                    logits = self.forward(samples)  # (num_samples, 1, H, W)
+                    
+                    # Extract predictions for pixel at (i, j)
+                    pixel_probs = logits[:, 0, i, j]  # (num_samples,)
+                    
+                    # Sample from Bernoulli distribution or use threshold
+                    samples[:, 0, i, j] = torch.bernoulli(pixel_probs)
+        return samples
 
 def mixture_logistics(
     x: torch.Tensor,
