@@ -1,5 +1,4 @@
-from deepul.hw1_helper import visualize_q2a_data
-from pixelcnn import BinaryPixelCNN
+from colored_pixelcnn import ColorPixelCNN
 
 import torch
 from torch import nn
@@ -11,8 +10,8 @@ import os
 
 
 def load_data():
-    shape_data = np.load('/workspace/deepul/homeworks/hw1/data/mnist.pkl', allow_pickle=True)
-    train_data, test_data, train_labels, test_labels = shape_data['train'], shape_data['test'], shape_data['train_labels'], shape_data['test_labels']
+    shape_data = np.load('/workspace/deepul/homeworks/hw1/data/shapes_colored.pkl', allow_pickle=True)
+    train_data, test_data = shape_data['train'], shape_data['test']
     return train_data, test_data
 
 def visualize_data(data, output_name='shapes_visualization.png'):
@@ -46,6 +45,16 @@ def visualize_loss(train_losses, val_losses, test_losses, output_name='loss_curv
     plt.savefig(output_name)
     plt.close()
 
+def visualize_histogram(data, output_name='pixel_histogram.png'):
+    plt.figure(figsize=(8, 5))
+    plt.hist(data.flatten(), bins=50, color='blue', alpha=0.7)
+    plt.xlabel('Pixel Value')
+    plt.ylabel('Frequency')
+    plt.title('Histogram of Pixel Values')
+    plt.grid()
+    plt.savefig(output_name)
+    plt.close()
+
 class BinaryDataset(torch.utils.data.Dataset):
     def __init__(self, data:torch.Tensor):
         data -= torch.min(data)
@@ -60,16 +69,17 @@ class BinaryDataset(torch.utils.data.Dataset):
 
 
 def main():
-    output_folder = 'q2b_results'
+    output_folder = 'q2b_shapes_color_results'
     os.makedirs(output_folder, exist_ok=True)
 
     train_data, test_data = load_data()
     train_data = train_data.transpose((0, 3, 1, 2)) # (B, H, W, C) -> (B, C, H, W)
     test_data = test_data.transpose((0, 3, 1, 2))
     visualize_data(test_data, output_name=f'{output_folder}/test_examples.png')
+    visualize_histogram(train_data, output_name=f'{output_folder}/train_pixel_histogram.png')
 
     N_batch_size = 128
-    N_epochs = 30
+    N_epochs = 1
     lr = 1e-3
     val_proportion = 0.1
     val_size = int(len(train_data) * val_proportion)
@@ -95,7 +105,7 @@ def main():
     test_dataset = BinaryDataset(test_data)
     test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=N_batch_size, shuffle=False)
 
-    model = BinaryPixelCNN(num_layers=10)
+    model = ColorPixelCNN()
     model.train().cuda()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
@@ -105,39 +115,43 @@ def main():
         model.train()
         for idx, batch in tqdm.tqdm(enumerate(train_dataloader)):
             batch = batch.cuda()
+            print(batch.shape)
             predictions = model(batch)
-            loss = F.binary_cross_entropy(predictions, batch)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+            print(predictions.shape)
+            loss = model.loss(predictions, batch)
+            print(loss.shape)
+            break
+            # optimizer.zero_grad()
+            # loss.backward()
+            # optimizer.step()
 
-            train_losses.append(loss.detach().cpu().numpy())
+            # train_losses.append(loss.detach().cpu().numpy())
 
-        model.eval()
-        with torch.no_grad():
-            # generate samples and save them
-            N_samples = 25
-            samples = model.sample(N_samples, train_data.shape[2], train_data.shape[3]).cpu().numpy() # (25, 1, H, W)
-            visualize_data(samples, output_name=f'{output_folder}/samples_epoch_{epoch}.png')
+    #     model.eval()
+    #     with torch.no_grad():
+    #         # generate samples and save them
+    #         N_samples = 25
+    #         samples = model.sample(N_samples, train_data.shape[2], train_data.shape[3]).cpu().numpy() # (25, 1, H, W)
+    #         visualize_data(samples, output_name=f'{output_folder}/samples_epoch_{epoch}.png')
         
-        with torch.no_grad():
-            val_loss = 0
-            for val_batch in val_dataloader:
-                val_batch = val_batch.cuda()
-                val_predictions = model(val_batch)
-                val_loss += F.binary_cross_entropy(val_predictions, val_batch)
-            val_loss /= len(val_dataloader)
-            val_losses.append(val_loss.detach().cpu().numpy())
+    #     with torch.no_grad():
+    #         val_loss = 0
+    #         for val_batch in val_dataloader:
+    #             val_batch = val_batch.cuda()
+    #             val_predictions = model(val_batch)
+    #             val_loss += F.binary_cross_entropy(val_predictions, val_batch)
+    #         val_loss /= len(val_dataloader)
+    #         val_losses.append(val_loss.detach().cpu().numpy())
             
-            test_loss = 0
-            for test_batch in test_dataloader:
-                test_batch = test_batch.cuda()
-                test_predictions = model(test_batch)
-                test_loss += F.binary_cross_entropy(test_predictions, test_batch)
-            test_loss /= len(test_dataloader)
-            test_losses.append(test_loss.detach().cpu().numpy())
-        print(f'val loss: {val_losses[-1]:.4f}, test loss: {test_losses[-1]:.4f}')
-    visualize_loss(train_losses, val_losses, test_losses, output_name=f'{output_folder}/loss_curves.png')
+    #         test_loss = 0
+    #         for test_batch in test_dataloader:
+    #             test_batch = test_batch.cuda()
+    #             test_predictions = model(test_batch)
+    #             test_loss += F.binary_cross_entropy(test_predictions, test_batch)
+    #         test_loss /= len(test_dataloader)
+    #         test_losses.append(test_loss.detach().cpu().numpy())
+    #     print(f'val loss: {val_losses[-1]:.4f}, test loss: {test_losses[-1]:.4f}')
+    # visualize_loss(train_losses, val_losses, test_losses, output_name=f'{output_folder}/loss_curves.png')
 
 if __name__ == '__main__':
     main()

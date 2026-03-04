@@ -1,5 +1,5 @@
 from deepul.hw1_helper import visualize_q2a_data
-from pixelcnn import PixelCNN, mixture_logistics
+from pixelcnn import BinaryPixelCNN
 
 import torch
 from torch import nn
@@ -94,7 +94,7 @@ def main():
     test_dataset = BinaryDataset(test_data)
     test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=N_batch_size, shuffle=False)
 
-    model = PixelCNN()
+    model = BinaryPixelCNN()
     model.train().cuda()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 

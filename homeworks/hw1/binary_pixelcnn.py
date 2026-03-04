@@ -4,34 +4,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-class MaskedConv2d(nn.Conv2d):
-    """
-    Masked convolution for PixelCNN.
-    mask_type: 'A' (exclude center) or 'B' (include center)
-    """
-    def __init__(self, in_channels, out_channels, kernel_size, mask_type='B', stride=1, padding=0, dilation=1, groups=1, bias=False):
-        super().__init__(in_channels, out_channels, kernel_size, stride=stride, padding=padding, dilation=dilation, groups=groups, bias=bias)
-        assert mask_type in ('A', 'B')
-        kh, kw = self.weight.shape[2], self.weight.shape[3]
-        center_h, center_w = kh // 2, kw // 2
-
-        mask = torch.ones_like(self.weight.data)
-        # zero out rows below center
-        mask[:, :, center_h+1:, :] = 0
-        # zero out columns to the right of center in center row
-        mask[:, :, center_h, center_w+1:] = 0
-        if mask_type == 'A':
-            # exclude center pixel
-            mask[:, :, center_h, center_w] = 0
-
-        # register so it moves with device/dtype and isn't trainable
-        self.register_buffer('mask', mask)
-
-    def forward(self, x):
-        masked_weight = self.weight * self.mask
-        return F.conv2d(x, masked_weight, bias=self.bias, stride=self.stride, padding=self.padding, dilation=self.dilation, groups=self.groups)
-
-class PixelCNN(nn.Module):
+class BinaryPixelCNN(nn.Module):
     def __init__(self, in_channels=1, hidden_channels=64, output_channels=1, kernel_size=7, num_layers=6):
         super().__init__()
         layers = nn.Sequential()
