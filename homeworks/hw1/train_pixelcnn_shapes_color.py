@@ -18,13 +18,15 @@ def visualize_data(data, output_name='shapes_visualization.png'):
     """data: (B, 1, H, W) numpy array of pixel values in [0, 1]
     """
     # visualize first 25 images from train_data (shape: B,1,H,W)
-    imgs = data[:25, 0, :, :] # (N, H, W)
-    rows = cols = 5
+    N = 25
+    imgs = data[:N, ...].transpose((0, 2, 3, 1)).astype('float32') # (N, H, W, C)
+    imgs = imgs / np.max(imgs) # scale to [0, 1] for visualization
+    rows = cols = int(N ** 0.5)
 
     fig, axes = plt.subplots(rows, cols, figsize=(8, 8))
     for i, ax in enumerate(axes.flat):
         if i < imgs.shape[0]:
-            ax.imshow(imgs[i], cmap='gray', vmin=0, vmax=np.max(data))
+            ax.imshow(imgs[i])
         ax.axis('off')
     plt.tight_layout()
     plt.savefig(output_name)
@@ -55,11 +57,9 @@ def visualize_histogram(data, output_name='pixel_histogram.png'):
     plt.savefig(output_name)
     plt.close()
 
-class BinaryDataset(torch.utils.data.Dataset):
+class Dataset(torch.utils.data.Dataset):
     def __init__(self, data:torch.Tensor):
-        data -= torch.min(data)
-        data /= torch.max(data)
-        self.data = data.float()
+        self.data = data
 
     def __len__(self):
         return len(self.data)
@@ -69,7 +69,7 @@ class BinaryDataset(torch.utils.data.Dataset):
 
 
 def main():
-    output_folder = 'q2b_shapes_color_results'
+    output_folder = 'q2b_shapes_color_results_v2'
     os.makedirs(output_folder, exist_ok=True)
 
     train_data, test_data = load_data()
@@ -79,7 +79,7 @@ def main():
     visualize_histogram(train_data, output_name=f'{output_folder}/train_pixel_histogram.png')
 
     N_batch_size = 128
-    N_epochs = 1
+    N_epochs = 75
     lr = 1e-3
     val_proportion = 0.1
     val_size = int(len(train_data) * val_proportion)
@@ -96,62 +96,59 @@ def main():
     print(f'Val data shape: {val_data.shape}')
     print(f'Test data shape: {test_data.shape}')
 
-    train_dataset = BinaryDataset(train_data)
+    train_dataset = Dataset(train_data)
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=N_batch_size, shuffle=True)
 
-    val_dataset = BinaryDataset(val_data)
+    val_dataset = Dataset(val_data)
     val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=N_batch_size, shuffle=False)
 
-    test_dataset = BinaryDataset(test_data)
+    test_dataset = Dataset(test_data)
     test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=N_batch_size, shuffle=False)
 
     model = ColorPixelCNN()
     model.train().cuda()
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-5)
 
     train_losses, val_losses, test_losses = [], [], []
 
     for epoch in range(N_epochs):
         model.train()
-        for idx, batch in tqdm.tqdm(enumerate(train_dataloader)):
+        for idx, batch in enumerate(train_dataloader):
             batch = batch.cuda()
-            print(batch.shape)
             predictions = model(batch)
-            print(predictions.shape)
             loss = model.loss(predictions, batch)
-            print(loss.shape)
-            break
-            # optimizer.zero_grad()
-            # loss.backward()
-            # optimizer.step()
 
-            # train_losses.append(loss.detach().cpu().numpy())
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
-    #     model.eval()
-    #     with torch.no_grad():
-    #         # generate samples and save them
-    #         N_samples = 25
-    #         samples = model.sample(N_samples, train_data.shape[2], train_data.shape[3]).cpu().numpy() # (25, 1, H, W)
-    #         visualize_data(samples, output_name=f'{output_folder}/samples_epoch_{epoch}.png')
-        
-    #     with torch.no_grad():
-    #         val_loss = 0
-    #         for val_batch in val_dataloader:
-    #             val_batch = val_batch.cuda()
-    #             val_predictions = model(val_batch)
-    #             val_loss += F.binary_cross_entropy(val_predictions, val_batch)
-    #         val_loss /= len(val_dataloader)
-    #         val_losses.append(val_loss.detach().cpu().numpy())
+            train_losses.append(loss.detach().cpu().numpy())
+
+        model.eval()
+        with torch.no_grad():
+            # generate samples and save them
+            N_samples = 25
+            samples = model.sample(N_samples, train_data.shape[2], train_data.shape[3]).cpu().numpy() # (25, 1, H, W)
+            visualize_data(samples, output_name=f'{output_folder}/samples_epoch_{epoch}.png')
+
+        with torch.no_grad():
+            val_loss = 0
+            for val_batch in val_dataloader:
+                val_batch = val_batch.cuda()
+                val_predictions = model(val_batch)
+                val_loss += model.loss(val_predictions, val_batch)
+            val_loss /= len(val_dataloader)
+            val_losses.append(val_loss.detach().cpu().numpy())
             
-    #         test_loss = 0
-    #         for test_batch in test_dataloader:
-    #             test_batch = test_batch.cuda()
-    #             test_predictions = model(test_batch)
-    #             test_loss += F.binary_cross_entropy(test_predictions, test_batch)
-    #         test_loss /= len(test_dataloader)
-    #         test_losses.append(test_loss.detach().cpu().numpy())
-    #     print(f'val loss: {val_losses[-1]:.4f}, test loss: {test_losses[-1]:.4f}')
-    # visualize_loss(train_losses, val_losses, test_losses, output_name=f'{output_folder}/loss_curves.png')
+            test_loss = 0
+            for test_batch in test_dataloader:
+                test_batch = test_batch.cuda()
+                test_predictions = model(test_batch)
+                test_loss += model.loss(test_predictions, test_batch)
+            test_loss /= len(test_dataloader)
+            test_losses.append(test_loss.detach().cpu().numpy())
+        print(f'epoch: {epoch}, val loss: {val_losses[-1]:.4f}, test loss: {test_losses[-1]:.4f}', end='\r')
+    visualize_loss(train_losses, val_losses, test_losses, output_name=f'{output_folder}/loss_curves.png')
 
 if __name__ == '__main__':
     main()

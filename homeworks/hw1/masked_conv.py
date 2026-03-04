@@ -34,15 +34,18 @@ class MaskedResidualBlock(nn.Module):
     def __init__(self, channels, kernel_size=3):
         super().__init__()
         self.convdw1 = MaskedConv2d(channels, channels//2, 1, mask_type='B', padding=0)
-        self.ln1 = nn.LayerNorm(channels)
+        self.ln1 = nn.LayerNorm(channels//2)
         self.conv1 = MaskedConv2d(channels//2, channels//2, kernel_size, mask_type='B', padding=kernel_size//2)
-        self.ln2 = nn.LayerNorm(channels)
+        self.ln2 = nn.LayerNorm(channels//2)
         self.convdw2 = MaskedConv2d(channels//2, channels, 1, mask_type='B', padding=0)
         self.ln3 = nn.LayerNorm(channels)
         self.relu = nn.ReLU(inplace=True)
 
+    def _layer_norm(self, x, ln):
+        return ln(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
+
     def forward(self, x):
-        out = self.relu(self.ln1(self.convdw1(x)))
-        out = self.relu(self.ln2(self.conv1(out)))
-        out = self.relu(self.ln3(self.convdw2(out)))
+        out = self.relu(self._layer_norm(self.convdw1(x), self.ln1))
+        out = self.relu(self._layer_norm(self.conv1(out), self.ln2))
+        out = self.relu(self._layer_norm(self.convdw2(out), self.ln3))
         return out + x # Residual connection
