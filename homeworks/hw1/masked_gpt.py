@@ -86,8 +86,8 @@ class GPT(nn.Module):
 
         pos_enc = sinusoidal_positional_encoding(max_seq_len + 1, d_model)  # Precompute positional encodings for a maximum sequence length of 400
         self.register_buffer('pos_enc', pos_enc)
-    
-        start_token = torch.zeros((1, 1, 1), dtype=torch.float32)  # Learnable start token
+
+        start_token = torch.zeros((1, 1, 1), dtype=torch.float32)
         self.register_buffer('start_token', start_token)
 
         mask = torch.tril(torch.ones((max_seq_len + 1, max_seq_len + 1), dtype=torch.bool))  # Causal mask for maximum sequence length
@@ -112,7 +112,8 @@ class GPT(nn.Module):
         return x[:, 1:, :]  # Remove the start token output
     
     def sample(self, N):
-        samples = torch.zeros(N, self.max_seq_len, 1).cuda()
+        # check that this is correctly sampling the modele
+        samples = torch.randint(2, (N, self.max_seq_len, 1)).cuda()
         for i in range(self.max_seq_len):
             pred = self.forward(samples)
 
@@ -122,9 +123,6 @@ class GPT(nn.Module):
             else:
                 raise "not yet implemented for multinomials"
         return samples
-
-
-
 
 def sinusoidal_positional_encoding(seq_len, d_model):
     pe = torch.zeros(seq_len, d_model)

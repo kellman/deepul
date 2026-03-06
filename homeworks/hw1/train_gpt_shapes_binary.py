@@ -100,29 +100,54 @@ def main():
 
     model = GPT(d_model, n_heads, d_ff, n_layers, d_output).cuda()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-
-    with torch.no_grad():
-        N = 25
-        samples = model.sample(25)
-        samples = samples.view(25, H, W, 1).permute(0, 3, 1, 2).cpu().numpy()
-        visualize_data(samples, output_name=f'{output_folder}/samples.png')
-
     train_losses, val_losses, test_losses = [], [], []
+
+
+
+    # num_warmup_steps = 1000
+    # num_total_steps = len(train_dataloader) * N_epochs
+    # def lr_lambda(current_step):
+    #     if current_step < num_warmup_steps:
+    #         return float(current_step) / float(max(1, num_warmup_steps))
+    #     return max(0.0, 0.5 * (1.0 + np.cos(np.pi * float(current_step - num_warmup_steps) / float(max(1, num_total_steps - num_warmup_steps)))))
+    # lr = torch.zeros(num_total_steps)
+    # for i in range(num_total_steps):
+    #     lr[i] = lr_lambda(i)
+
+    # from matplotlib import pyplot as plt
+    # plt.figure()
+    # plt.plot(lr)
+    # plt.savefig(f'{output_folder}/lr_schedule.png')
+
+    # from pdb import set_trace; set_trace()
+
+
+
+    def get_cosine_schedule_with_warmup(optimizer, num_warmup_steps, num_total_steps):
+        def lr_lambda(current_step):
+            if current_step < num_warmup_steps:
+                return float(current_step) / float(max(1, num_warmup_steps))
+            return max(0.0, 0.5 * (1.0 + np.cos(np.pi * float(current_step - num_warmup_steps) / float(max(1, num_total_steps - num_warmup_steps)))))
+        return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
+
+    num_warmup_steps = 1000
+    num_total_steps = len(train_dataloader) * N_epochs
+    scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps, num_total_steps)
 
     for epoch in range(N_epochs):
         model.train()
         for idx, batch in tqdm.tqdm(enumerate(train_dataloader)):
             # prepare data
-            batch = batch.cuda()            
+            batch = batch.cuda()
             # compute model and loss
             predictions = model(batch)  # (B, H*W, d_output)
             loss = F.binary_cross_entropy(predictions, batch)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            scheduler.step()
 
             train_losses.append(loss.detach().cpu().numpy())
-
         model.eval()
         with torch.no_grad():
             # generate samples and save them
