@@ -66,7 +66,7 @@ def main():
     _, H, W, C = train_data.shape
 
     N_batch_size = 128
-    N_epochs = 30
+    N_epochs = 100
     lr = 1e-3
     val_proportion = 0.1
     val_size = int(len(train_data) * val_proportion)
@@ -169,7 +169,7 @@ def main():
             test_loss /= len(test_dataloader)
             test_losses.append(test_loss.detach().cpu().numpy())
         print(f'val loss: {val_losses[-1]:.4f}, test loss: {test_losses[-1]:.4f}')
-    visualize_loss(train_losses, val_losses, test_losses, output_name=f'{output_folder}/loss_curves.png')
-
+        visualize_loss(train_losses, val_losses, test_losses, output_name=f'{output_folder}/loss_curves.png')
+        torch.save(model.state_dict(), f'{output_folder}/model_{epoch}.pt')
 if __name__ == '__main__':
     main()
