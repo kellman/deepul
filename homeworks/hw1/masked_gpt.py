@@ -55,10 +55,8 @@ class MaskedTransformerBlock(nn.Module):
         self.ln2 = nn.LayerNorm(d_model)
 
     def forward(self, x, mask):
-        attn_output = self.attn(x, mask)
-        x = self.ln1(x + attn_output) 
-        ff_output = self.ff(x)
-        x = self.ln2(x + ff_output)
+        x = x + self.attn(self.ln1(x), mask)
+        x = x + self.ff(self.ln2(x))
         return x
 
 class GPT(nn.Module):
@@ -79,7 +77,10 @@ class GPT(nn.Module):
         super().__init__()
         self.stem = nn.Linear(1, d_model)  # project input to d_model dimensions
         self.layers = nn.ModuleList([MaskedTransformerBlock(d_model, num_heads, d_ff) for _ in range(num_layers)])
-        self.head = nn.Linear(d_model, d_output)
+        self.head = nn.Sequential(
+            nn.LayerNorm(d_model),
+            nn.Linear(d_model, d_output)
+        )
 
         self.d_output = d_output
         self.max_seq_len = max_seq_len
@@ -94,14 +95,13 @@ class GPT(nn.Module):
         self.register_buffer('mask', mask)
 
     def forward(self, x):
+        # x is (batch_size, seq_len + 1, 1), with x[:, 0] = start_token
         x = 2 * x - 1
-        x = torch.cat([self.start_token.expand(x.shape[0], -1, -1), x], dim=1)  # Prepend start token, resulting in shape (batch_size, seq_len + 1, d_model)
-
-        x = self.stem(x)  # (batch_size, seq_len, d_model)
+        x = self.stem(x)  # (batch_size, seq_len + 1, d_model)
         x += self.pos_enc[:x.size(1), :].unsqueeze(0)  # Add positional encoding
 
         for layer in self.layers:
-            x = layer(x, self.mask)
+            x = layer(x, self.mask[:x.size(1), :x.size(1)])
 
         x = self.head(x)
 
@@ -109,19 +109,17 @@ class GPT(nn.Module):
             x = torch.sigmoid(x)
         else:
             x = F.softmax(x, dim=-1)
-        return x[:, 1:, :]  # Remove the start token output
+        return x
     
     def sample(self, N):
-        # check that this is correctly sampling the modele
-        samples = torch.randint(2, (N, self.max_seq_len, 1)).cuda()
+        samples = torch.zeros(N, self.max_seq_len, 1).cuda()
+        current = self.start_token.expand(N, -1, -1).cuda()  # (N, 1, 1)
         for i in range(self.max_seq_len):
-            pred = self.forward(samples)
-
-            # get current value and sample
-            if self.d_output == 1:
-                samples[:, i, 0] = torch.bernoulli(pred[:, i, 0])
-            else:
-                raise "not yet implemented for multinomials"
+            pred = self.forward(current)  # current is (N, i+1, 1), start + i samples
+            next_pred = pred[:, -1, 0]  # prediction for the next (i-th) pixel
+            next_sample = torch.bernoulli(next_pred).unsqueeze(-1)  # (N, 1)
+            samples[:, i, :] = next_sample
+            current = torch.cat([current, next_sample.unsqueeze(-1)], dim=1)
         return samples
 
 def sinusoidal_positional_encoding(seq_len, d_model):

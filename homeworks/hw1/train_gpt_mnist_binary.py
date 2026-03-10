@@ -10,7 +10,7 @@ import os
 
 
 def load_data():
-    shape_data = np.load('/workspace/deepul/homeworks/hw1/data/shapes.pkl', allow_pickle=True)
+    shape_data = np.load('/workspace/deepul/homeworks/hw1/data/mnist.pkl', allow_pickle=True)
     train_data, test_data, train_labels, test_labels = shape_data['train'], shape_data['test'], shape_data['train_labels'], shape_data['test_labels']
     return train_data, test_data
 
@@ -59,13 +59,13 @@ class BinaryDataset(torch.utils.data.Dataset):
 
 
 def main():
-    output_folder = 'q3a_binary_shapes'
+    output_folder = 'q3a_binary_mnist_results'
     os.makedirs(output_folder, exist_ok=True)
 
     train_data, test_data = load_data()
     _, H, W, C = train_data.shape
 
-    N_batch_size = 64
+    N_batch_size = 128
     N_epochs = 30
     lr = 1e-3
     val_proportion = 0.1
@@ -112,7 +112,6 @@ def main():
         samples = model.sample(N_samples)
         samples = samples.view(N_samples, H, W, 1).permute(0, 3, 1, 2).cpu().float().numpy()
         visualize_data(samples, output_name=f'{output_folder}/sample_gen_test.png')
-    # return
 
     def get_cosine_schedule_with_warmup(optimizer, num_warmup_steps, num_total_steps):
         def lr_lambda(current_step):
